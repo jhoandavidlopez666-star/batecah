@@ -1,31 +1,39 @@
 import os
-import threading
+from flask import Flask, request
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
-from flask import Flask
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 app = Flask(_name_)
 
-@app.route('/')
-def home():
-    return "¡Batecah Bot está activo y operando 24/7!"
+TOKEN = "8908447215:AAG6U-iWLLzuH9kOZ1bRpU9L_1haGPGccY"
 
-def run_web():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+# Inicializamos la app del bot de forma síncrona para webhooks
+application = Application.builder().token(TOKEN).build()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("¡Epa, papá! Batecah activo y listo para la acción. 🦾🔥")
+    await update.message.reply_text("¡Epa, papá! Batecah activo y operando 24/7 con webhook. 🦾🔥")
+
+application.add_handler(CommandHandler('start', start))
+
+@app.route('/')
+def home():
+    return "¡Batecah Bot Web Service is running!"
+
+@app.route(f'/{TOKEN}', methods=['POST'])
+def webhook():
+    # Recibe la actualización de Telegram y la procesa
+    json_data = request.get_json(force=True)
+    update = Update.de_json(json_data, application.bot)
+    
+    # Ejecutamos el procesamiento del update de forma síncrona
+    import asyncio
+    asyncio.run(application.initialize())
+    asyncio.run(application.process_update(update))
+    return 'OK', 200
 
 if _name_ == '_main_':
-    web_thread = threading.Thread(target=run_web)
-    web_thread.daemon = True
-    web_thread.start()
-
-    TOKEN = "8908447215:AAG6U-iWLLzuH9kOZ1bRpU9L_1haGPGccY"
-
-    application = ApplicationBuilder().token(TOKEN).build()
-    application.add_handler(CommandHandler('start', start))
-
-    print("Iniciando bot en modo polling...")
-    application.run_polling()
+    # Configuramos el webhook automáticamente en Telegram al arrancar
+    PORT = int(os.environ.get('PORT', 10000))
+    # Nota: Render te da una URL pública como https://batecah.onrender.com
+    # Puedes configurar la URL del webhook si gustas, o dejar que Flask escuche el puerto
+    app.run(host='0.0.0.0', port=PORT)
