@@ -1,39 +1,42 @@
 import os
-from flask import Flask, request
+import http.server
+import socketserver
+import threading
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 
-app = Flask(_name_)
+# 1. Servidor HTTP nativo para que Render abra el puerto 10000 feliz
+PORT = int(os.environ.get("PORT", 10000))
 
-TOKEN = "8908447215:AAG6U-iWLLzuH9kOZ1bRpU9L_1haGPGccY"
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.write(b"Batecah Bot is alive!")
 
-# Inicializamos la app del bot de forma síncrona para webhooks
-application = Application.builder().token(TOKEN).build()
+def run_server():
+    with socketserver.TCPServer(("0.0.0.0", PORT), Handler) as httpd:
+        print(f"Servidor web corriendo en puerto {PORT}")
+        httpd.serve_forever()
 
+# 2. Función del bot de Telegram
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("¡Epa, papá! Batecah activo y operando 24/7 con webhook. 🦾🔥")
+    await update.message.reply_text("¡Epa, papá! Batecah activo y operando 24/7. 🦾🔥")
 
-application.add_handler(CommandHandler('start', start))
+# 3. Arranque principal
+def main():
+    # Lanzamos el servidor web en un hilo secundario
+    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread.start()
 
-@app.route('/')
-def home():
-    return "¡Batecah Bot Web Service is running!"
-
-@app.route(f'/{TOKEN}', methods=['POST'])
-def webhook():
-    # Recibe la actualización de Telegram y la procesa
-    json_data = request.get_json(force=True)
-    update = Update.de_json(json_data, application.bot)
+    # Arrancamos el bot de Telegram en el hilo principal
+    TOKEN = "8908447215:AAG6U-iWLLzuH9kOZ1bRpU9L_1haGPGccY"
+    application = ApplicationBuilder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
     
-    # Ejecutamos el procesamiento del update de forma síncrona
-    import asyncio
-    asyncio.run(application.initialize())
-    asyncio.run(application.process_update(update))
-    return 'OK', 200
+    print("Iniciando bot de Telegram...")
+    application.run_polling()
 
 if _name_ == '_main_':
-    # Configuramos el webhook automáticamente en Telegram al arrancar
-    PORT = int(os.environ.get('PORT', 10000))
-    # Nota: Render te da una URL pública como https://batecah.onrender.com
-    # Puedes configurar la URL del webhook si gustas, o dejar que Flask escuche el puerto
-    app.run(host='0.0.0.0', port=PORT)
+    main()
